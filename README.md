@@ -81,6 +81,7 @@ The project is built against the modern Android platform while maintaining robus
 |---|---|---|
 | **Android Compile SDK** | `37` | Compiles against latest Android Platform Target 37 APIs |
 | **Android Target SDK** | `37` | Targets Android Platform Target 37 runtime behavior |
+| **Android Build-Tools** | `37.0.0` | Latest Android SDK Build-Tools matching Platform 37 |
 | **Android Minimum SDK** | `28` | **Backward compatible** with Android 9.0 (Pie) through Android 15/16/API 37 |
 | **Android NDK** | `30` (`30.0.16248370`) | Android NDK r30 LLVM toolchain with C11 standard |
 | **Gradle** | `9.7+` (v9.7.1) | Gradle 9.7+ wrapper with instant execution and configuration cache |
@@ -215,7 +216,7 @@ To build Antigravity Mobile locally, ensure the following are installed:
 - **JDK 17 LTS** (OpenJDK / Eclipse Temurin 17)
 - **Android SDK** with:
   - Android Platform Target `37` (`platforms;android-37`)
-  - Android Build-Tools `35.0.0` or higher
+  - Android Build-Tools `37.0.0` (latest)
   - Android NDK `30` (`ndk;30.0.16248370`)
   - CMake `3.22.1` or higher
 - **Git** with submodule support
@@ -251,8 +252,9 @@ Compile Debug APK:
 ./gradlew assembleDebug --stacktrace
 ```
 
-Compile Release APK (Unsigned):
+Compile Signed Release APK:
 ```bash
+# If release.keystore is present or configured via environment variables:
 ./gradlew assembleRelease --stacktrace
 ```
 
@@ -268,26 +270,32 @@ Clean Build Artifacts:
 
 ### Build Outputs
 
-| Variant | Output Location |
-|---|---|
-| **Debug APK** | `app/build/outputs/apk/debug/app-debug.apk` |
-| **Release APK** | `app/build/outputs/apk/release/app-release-unsigned.apk` |
+| Variant | Output Location | Details |
+|---|---|---|
+| **Debug APK** | `app/build/outputs/apk/debug/app-debug.apk` | Unminified debug build with `.debug` suffix |
+| **Signed Release APK** | `app/build/outputs/apk/release/app-release.apk` | R8-minified, release signed with APK Signature Scheme v2/v3 |
 
 ---
 
 ## Continuous Integration (CI/CD)
 
-The automated build pipeline is located at [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+The automated build pipeline is located at [`.github/workflows/ci.yml`](.github/workflows/ci.yml), modeled after the [DAntigravity CI reference](https://github.com/InfidelRahul/DAntigravity/blob/main/.github/workflows/ci.yml).
 
 ### Workflow Capabilities
 
-- **Trigger Matrix**: Automatically runs on every push and pull request to `main` / `master`, and supports manual on-demand execution via `workflow_dispatch`.
+- **Trigger Matrix**:
+  - Push to `main`, `develop`, and version tags (`v*`).
+  - Pull requests to `main` and `develop`.
+  - Manual trigger via `workflow_dispatch` with custom version tag parameter.
 - **Reproducible Toolchain**:
-  - Automatically provisions JDK 17 (Temurin).
-  - Configures Gradle 9.7+ caching via `gradle/actions/setup-gradle@v4`.
-  - Installs Android SDK Platform Target `37`, Build Tools `35.0.0`, NDK `30.0.16248370`, and CMake `3.22.1`.
+  - Automatically provisions JDK 21 (Temurin).
+  - Configures Gradle 9.7+ wrapper caching via `gradle/actions/setup-gradle@v4`.
+  - Installs Android SDK Platform Target `37`, Build Tools `37.0.0`, NDK `30.0.16248370`, and CMake `3.22.1`.
 - **Submodule Recursion**: Automatically clones and verifies the `vendor/proot` submodule.
-- **Verification**: Asserts the generation and file integrity of both debug and release APK packages.
+- **Automated Release Signing**: Automatically decodes `KEYSTORE_BASE64` from repository secrets or generates a release keystore, signing the production APK with `apksigner`.
+- **Verification**: Verifies the cryptographic signature (`apksigner verify --verbose`), file integrity, and SHA-256 checksums of the release package.
+- **GitHub Releases**: Automatically publishes drafted releases on tag pushes or manual workflow dispatch via `softprops/action-gh-release@v2`.
+- **Failure Diagnostics**: Automatically archives build failure reports on job failures.
 
 ---
 
@@ -296,18 +304,17 @@ The automated build pipeline is located at [`.github/workflows/ci.yml`](.github/
 Every build triggered on GitHub Actions uploads compiled APKs via `actions/upload-artifact@v4`:
 
 ```yaml
-- name: Upload Build Artifacts (Validity: 1 Day)
+- name: Upload Signed Release APK Artifact (1-Day Validity)
   uses: actions/upload-artifact@v4
   with:
-    name: antigravity-mobile-apks
-    path: |
-      app/build/outputs/apk/**/*.apk
+    name: antigravity-mobile-signed-release-apk
+    path: app/build/outputs/apk/release/app-release.apk
     retention-days: 1
     if-no-files-found: error
 ```
 
 > [!IMPORTANT]
-> **1-Day Validity**: Artifacts uploaded by CI are set with `retention-days: 1`. They are strictly retained for **24 hours** from completion and automatically purged thereafter. This prevents storage bloat while ensuring fresh test builds are readily available for immediate device validation.
+> **1-Day Validity**: Artifacts uploaded by CI are configured with `retention-days: 1`. They are strictly retained for **24 hours** from completion and automatically purged thereafter. This prevents storage bloat while ensuring fresh test builds are readily available for immediate device validation.
 
 ---
 
