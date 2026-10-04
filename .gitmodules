@@ -1,0 +1,4 @@
+[submodule "vendor/proot"]
+	path = vendor/proot
+	url = https://github.com/LinuxDroidapp/proot.git
+	branch = master
