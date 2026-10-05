@@ -46,7 +46,6 @@ jobs:
     - name: Setup Android SDK with NDK
       uses: android-actions/setup-android@v3
       with:
-        cmdline-tools-version: 11076708
         packages: 'platform-tools platforms;android-37.1 build-tools;37.0.0 ndk;30.0.16248370 cmake;3.22.1'
 
     - name: Set NDK & Environment Variables
@@ -55,6 +54,15 @@ jobs:
         echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/30.0.16248370" >> $GITHUB_ENV
         echo "NDK installed revision:"
         cat "$ANDROID_SDK_ROOT/ndk/30.0.16248370/source.properties" | grep Pkg.Revision || true
+
+        # Ensure platforms/android-37 directory exists and has matching ApiLevel=37 for AGP compileSdk = 37
+        if [ -d "$ANDROID_SDK_ROOT/platforms/android-37.1" ] && [ ! -d "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
+          echo "Setting up platforms/android-37 from android-37.1..."
+          cp -r "$ANDROID_SDK_ROOT/platforms/android-37.1" "$ANDROID_SDK_ROOT/platforms/android-37"
+          sed -i 's/AndroidVersion.ApiLevel=37.1/AndroidVersion.ApiLevel=37/' "$ANDROID_SDK_ROOT/platforms/android-37/source.properties" || true
+        fi
+        echo "Platforms directory content:"
+        ls -la "$ANDROID_SDK_ROOT/platforms/"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -78,12 +86,16 @@ jobs:
             -keypass antigravitymobile123 \
             -dname "CN=AntigravityMobile, OU=Mobile, O=AntigravityMobile, L=San Francisco, S=CA, C=US"
         fi
+        ls -la release.keystore
 
     - name: Build Signed Release APK & Debug APK
       env:
+        KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'antigravitymobile123' }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'antigravitymobile' }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'antigravitymobile123' }}
+        ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/30.0.16248370
+        ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/30.0.16248370
       run: |
         ./gradlew assembleRelease assembleDebug --no-configuration-cache --stacktrace
 
@@ -91,12 +103,18 @@ jobs:
       run: |
         APK_PATH="app/build/outputs/apk/release/app-release.apk"
         if [ ! -f "$APK_PATH" ]; then
-          echo "Error: Signed release APK not found at $APK_PATH"
+          echo "Signed release APK not found at $APK_PATH, checking release directory:"
           ls -la app/build/outputs/apk/release/ || true
-          exit 1
+          FOUND_APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          if [ -n "$FOUND_APK" ]; then
+            APK_PATH="$FOUND_APK"
+          else
+            echo "Error: No release APK found"
+            exit 1
+          fi
         fi
         
-        echo "=== Verifying APK Signature ==="
+        echo "=== Verifying APK Signature for $APK_PATH ==="
         $ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner verify --verbose "$APK_PATH"
         
         echo "=== APK File Details ==="
@@ -107,7 +125,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: antigravity-mobile-signed-release-apk
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/*.apk
         retention-days: 1
         if-no-files-found: error
 
@@ -123,7 +141,7 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v2
       with:
-        files: app/build/outputs/apk/release/app-release.apk
+        files: app/build/outputs/apk/release/*.apk
         generate_release_notes: true
         draft: false
         prerelease: false
