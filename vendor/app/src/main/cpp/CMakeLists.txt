@@ -1,6 +1,0 @@
-cmake_minimum_required(VERSION 3.22.1)
-project(antigravity_native C)
-add_library(antigravity_native SHARED pty_bridge.c)
-find_library(log-lib log)
-target_link_libraries(antigravity_native ${log-lib})
-target_compile_options(antigravity_native PRIVATE -Wall -Wextra -Werror)

@@ -46,21 +46,24 @@ jobs:
     - name: Setup Android SDK with NDK
       uses: android-actions/setup-android@v3
       with:
-        packages: 'platform-tools platforms;android-37.1 build-tools;37.0.0 ndk;30.0.16248370 cmake;3.22.1'
+        packages: 'platform-tools platforms;android-37.1 build-tools;36.0.0 ndk;30.0.16248370 cmake;3.22.1'
 
     - name: Set NDK & Environment Variables
       run: |
         echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/30.0.16248370" >> $GITHUB_ENV
         echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/30.0.16248370" >> $GITHUB_ENV
+        echo "ANDROID_NDK_VERSION=30.0.16248370" >> $GITHUB_ENV
         echo "NDK installed revision:"
         cat "$ANDROID_SDK_ROOT/ndk/30.0.16248370/source.properties" | grep Pkg.Revision || true
 
         # Ensure platforms/android-37 directory exists and has matching ApiLevel=37 for AGP compileSdk = 37
-        if [ -d "$ANDROID_SDK_ROOT/platforms/android-37.1" ] && [ ! -d "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
-          echo "Setting up platforms/android-37 from android-37.1..."
-          cp -r "$ANDROID_SDK_ROOT/platforms/android-37.1" "$ANDROID_SDK_ROOT/platforms/android-37"
-          sed -i 's/AndroidVersion.ApiLevel=37.1/AndroidVersion.ApiLevel=37/' "$ANDROID_SDK_ROOT/platforms/android-37/source.properties" || true
-        fi
+        for p in "$ANDROID_SDK_ROOT/platforms"/android-37*; do
+          if [ -d "$p" ] && [ "$p" != "$ANDROID_SDK_ROOT/platforms/android-37" ] && [ ! -d "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
+            echo "Setting up platforms/android-37 from $p..."
+            cp -r "$p" "$ANDROID_SDK_ROOT/platforms/android-37"
+            sed -i 's/AndroidVersion.ApiLevel=.*/AndroidVersion.ApiLevel=37/' "$ANDROID_SDK_ROOT/platforms/android-37/source.properties" || true
+          fi
+        done
         echo "Platforms directory content:"
         ls -la "$ANDROID_SDK_ROOT/platforms/"
 
@@ -94,8 +97,6 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'antigravitymobile123' }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'antigravitymobile' }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'antigravitymobile123' }}
-        ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/30.0.16248370
-        ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/30.0.16248370
       run: |
         ./gradlew assembleRelease assembleDebug --no-configuration-cache --stacktrace
 
@@ -115,7 +116,8 @@ jobs:
         fi
         
         echo "=== Verifying APK Signature for $APK_PATH ==="
-        $ANDROID_SDK_ROOT/build-tools/37.0.0/apksigner verify --verbose "$APK_PATH"
+        APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner | sort -V | tail -n 1)
+        "$APKSIGNER" verify --verbose "$APK_PATH"
         
         echo "=== APK File Details ==="
         ls -lh "$APK_PATH"

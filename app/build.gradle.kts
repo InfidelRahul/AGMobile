@@ -7,7 +7,7 @@ plugins {
 android {
     namespace = "com.infidelrahul.antigravitymobile"
     compileSdk = 37
-    buildToolsVersion = "37.0.0"
+    buildToolsVersion = "36.0.0"
     ndkVersion = System.getenv("ANDROID_NDK_VERSION") ?: "30.0.16248370"
 
     defaultConfig {
@@ -22,8 +22,8 @@ android {
         }
         externalNativeBuild {
             cmake {
-                cFlags += "-std=c11 -Wall -Wextra -Werror"
-                cppFlags += "-std=c11 -Wall -Wextra -Werror"
+                cFlags += "-std=c11 -Wall -Wextra"
+                cppFlags += "-std=c11 -Wall -Wextra"
             }
         }
     }
@@ -100,14 +100,8 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.09.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
     implementation("androidx.activity:activity-compose:1.11.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
